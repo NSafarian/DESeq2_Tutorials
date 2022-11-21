@@ -388,7 +388,11 @@ library(DESeq2)
 dds <- DESeqDataSetFromMatrix(countData = cts, 
                               colData = coldata, 
                               design = ~ Ethnicity + PMI + RIN + Sex + ageOfDeath)
-
+                              
+                              
+# for numerical covariates like Age the model matrix with or without intercept ( ~ Age vs. ~ 0+ Age, respectively) will result in two different outputs. 
+# Vidualize the slope of fitted line for each gene to make sure which model would fit better. But, as a role of thumb, for the numerical covariates it's 
+# better to include the intercept (i.e., Design= ~ Age). 
 ```
 
 ```{r}
