@@ -324,8 +324,9 @@ ggplot(G1, aes(x=ageOfDeath, y=count)) +
   geom_point() + 
   ggtitle("ENSG00000230746.1 expression declines with age")+
   theme_bw()+
-  theme(axis.text = element_text(size = 10),
-        axis.title=element_text(size=10,face="bold"))+
+  theme(axis.text.x = element_blank(), # this will erase the X-axis labels 
+        axis.text.y = element_text(size = 10),
+        axis.title =element_text(size=10,face="bold"))+
   theme(plot.title = element_text(size = 8, face = "bold"))+
   scale_y_log10()
 
