@@ -1,0 +1,382 @@
+---
+title: "DESeq2_CMCdata_Tutorial_Part2"
+author: "Nickie Safarian"
+date: "11/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load the libraries
+
+```{r, include=FALSE}
+
+library(tidyverse)
+library(DESeq2)
+
+```
+
+
+## Import the data
+
+```{r}
+
+METADATA <- readRDS(file=file.path("/external/rprshnas01/kcni/nsafarian/CMC_Data_Analysis/CommonMind.Data/SynapseR_MainData/CMC_metadata_merged_with_Genotyping_CellFrac_451.Control.samples.31covar.Rds"))
+
+geneCountsMerged  <- readRDS (file=file.path("/external/rprshnas01/kcni/nsafarian/CMC_Data_Analysis/CommonMind.Data/SynapseR_MainData/MPP_HBCC_Counts_merged.1005.Samples.Rds"))
+
+
+```
+
+## Constructing the DESeq2 object 
+### Step 1) Match_covariates_to_expression_data
+
+```{r}
+
+# Calculates the intersection of subsets of a probability space. 
+# intersect() compares row-wise so intersect(A,B) is a 
+# df with same rows in A and in B.
+indToRetain = intersect(unique(METADATA$SampleID), 
+                        unique(colnames(geneCountsMerged )))
+geneCountsMerged  = geneCountsMerged [,indToRetain]
+
+rownames(METADATA) = METADATA$SampleID
+
+```
+
+### Step2) Define Coldata & Cts
+
+```{r}
+
+coldata = METADATA
+cts = geneCountsMerged
+
+# Very important:
+cts <- round(cts) %>%  # convert values to integers
+  as.data.frame() %>%
+  dplyr::filter(rowSums(.) > 0) # remove genes with zero total 
+                                 # counts across samples
+
+```
+
+### Step3) Check coldata & Cts IDs are matching and in the same order
+
+```{r}
+
+# Ensure coldata and cts are in the same order
+all(rownames(coldata) == colnames(cts))
+# Ensure the same samples across cts and coldata
+all(rownames(coldata) %in% colnames(cts))
+
+```
+
+Let’s move on to bivariate statistics. We are plotting a correlation matrix,
+in order to a) check if we have features that are highly correlated (which is 
+problematic for some algorithms), and b) get a first feeling about which 
+features are correlated with the target (e.g., diagnosis) and which are not:
+
+#### *1. Plot the correlation matrix for the numerical covariates:*
+```{r}
+
+num.vars <- coldata [, c(9:12)] # Age, pH, PMI, RIN
+CovarCor = cor(num.vars, method = "pearson", use = "complete.obs")
+round(CovarCor, 2)
+
+```
+
+```{r}
+
+cormat <- cor(num.vars)
+cormat %>% as.data.frame %>% mutate(var=rownames(.)) %>%
+  pivot_longer(!var, values_to = "value") %>%
+  ggplot(aes(x=name,y=var,fill=abs(value),label=round(value,2))) +
+  geom_tile() + geom_label() + xlab("") + ylab("") +
+  ggtitle("Correlation matrix of our predictors") +
+  labs(fill="Correlation\n(absolute):")
+
+# Note: pH column has NAs, that's why this code returns a plot with empty 
+# entry for the correlation of pH covariates with others
+
+```
+  
+#### *2. Categorical variables**
+we just use simple stacked barplots to show the differences between groups:
+```{r}
+
+coldata [, c(4,5,7)]%>% # Cohort, Gender, Ethnicity
+  pivot_longer(!Cohort, values_to = "value") %>%
+  ggplot(aes(x=factor(value), fill=factor(Cohort))) +
+  scale_fill_manual(values=alpha(c("#67a9cf", "#ef8a62"), 0.7)) +
+  geom_bar(position="fill", alpha=.7)+
+  theme_minimal() +
+  facet_wrap(~name, scales="free")
+
+```
+
+
+### Step 4) Scale numerical covariates in the coldata accordingly
+
+```{r}
+
+coldata$ageOfDeath = scale(coldata$ageOfDeath)
+coldata$PMI = scale(coldata$PMI)
+coldata$pH = scale(coldata$pH)
+coldata$RIN = scale(coldata$RIN)
+
+```
+
+### Step 5) Factor the categorical covariates in the coldata
+
+```{r}
+
+coldata$Ethnicity <- factor(coldata$Ethnicity, 
+                            c("Caucasian","African.American"))
+coldata$Sex <- factor(coldata$Sex , c("XY","XX")) 
+coldata$Reported_Gender <- factor(coldata$Reported_Gender, c("Male", "Female"))
+coldata$Dx = factor(coldata$Dx, c('Control')) #'SCZ'
+
+```
+
+
+### Step 6) DESeq2_object design
+
+```{r}
+
+dds <- DESeqDataSetFromMatrix(countData = cts, 
+                              colData = coldata, 
+                              design = 
+                                ~ Ethnicity+Reported_Gender+PMI+ageOfDeath)
+
+```
+
+```{r}
+
+# Perform pre-filtering to remove genes that are lowly expressed 
+# (at least 10 counts)
+dds <- estimateSizeFactors(dds)
+ids <- rowSums(counts(dds, normalized=TRUE) >= 10 ) >= 3 
+dds <- dds[ids, ]
+
+```
+
+### Step 7) Ensure proper reference levels for factors 
+
+```{r}
+
+dds$Ethnicity <- relevel(dds$Ethnicity, "Caucasian")
+dds$Sex <- relevel(dds$Sex, "XY")
+dds$Dx <- relevel(dds$Dx,"Control")
+
+```
+
+### Step 8) Differential Expression
+The next step is to run the function DEseq() on our DESeq2 data set object. 
+In this step the algorithm will perform the following:
+
+__1__Estimation of size factors
+__2__Estimation of dispersion
+__3__Negative Binomial GLM fitting and Wald statistic.
+
+```{r}
+
+dds <- DESeq(dds)
+
+```
+
+```{r}
+
+saveRDS(dds, "dds_CMCdata_onlyControls.counts.more.than.10.Rds")
+
+```
+
+
+### Step 9) Extracting results
+```{r}
+
+# get the names for contrasting/comparing
+resultsNames(dds) 
+
+```
+
+
+```{r}
+
+# get the results
+Res.Age <- results(dds, name="ageOfDeath")
+
+# View summary of results
+summary(Res.Age)
+
+```
+
+Note: results function automatically performs independent filtering based on
+the mean of normalized counts for each gene, optimizing the number of genes 
+which will have an adjusted p value below a given FDR cutoff, alpha.
+
+```{r}
+
+#How many adjusted p-values were less than 0.05?
+sum(Res.Age$padj < 0.05, na.rm=TRUE) #27941 gene
+
+#first remove NAs 
+sigs <- na.omit(Res.Age)
+
+#set the padj cutoff at 0.05
+sigs <- sigs[sigs$padj < 0.05, ]
+sigs.df <- as.data.frame(sigs)
+
+```
+
+
+### Step 10) Adding gene names
+Our result table only uses Ensembl gene IDs, but gene names may be more 
+informative. Bioconductor’s biomaRt package can help with mapping various 
+ID schemes to each other.
+```{r}
+
+# Ensembl ids have some decimal at the end of the identfiers, I don't know why 
+# and how!!!!! 
+# First, we split up the rownames of the results object, which contain ENSEMBL 
+# gene ids, separated by the a dot (.). The following code then takes the first id for each gene by invoking the open square bracket function "[" and the argument, 1.
+sigs.df$ensemblID <- sapply(strsplit(rownames(sigs.df), split="\\." ), "[", 1 )
+
+
+#The following chunk of code uses the ENSEMBL mart, querying with the ENSEMBL gene id and requesting the Entrez gene id and HGNC gene symbol.
+
+library( "biomaRt" )
+ensembl <- useMart( "ensembl", dataset = "hsapiens_gene_ensembl" )
+genemap <- getBM( attributes = 
+                    c("ensembl_gene_id", 'external_gene_name', "hgnc_symbol"),
+                  filters = "ensembl_gene_id", 
+                  values = sigs.df$ensemblID, 
+                  mart = ensembl)
+
+
+idx <- match(sigs.df$ensemblID, genemap$ensembl_gene_id )
+sigs.df$entrez <- genemap$external_gene_name[ idx ]
+sigs.df$hgnc_symbol <- genemap$hgnc_symbol[ idx ]
+
+
+head(sigs.df)
+
+```
+
+```{r}
+
+# Save
+write.csv(sigs.df, "DESeq2.results_for_Age.csv" )
+
+```
+
+
+## Step 11) Exploring the results
+### *MA-plot (Diagnostic plots)*
+MA plots display a log ratio (M) vs an average (A) in order to visualize the differences between groups. 
+
+```{r}
+
+plotMA(Res.Age, main= "Age-related DEG") 
+
+```
+  
+
+### *Plotting the single gene counts*
+
+```{r}
+
+# order the results and pick top 6 genes to plot
+sigs.ordered <- sigs.df[order(sigs.df$log2FoldChange, sigs.df$pvalue),]
+
+# Convert age from numeric to a factor to be able to use "plotCounts()" function
+dds@colData$ageOfDeath <- as.factor(dds@colData$ageOfDeath)
+
+# Plot the top 6 DEGs for Age (3 downreguated and 3 upregulated):
+par(mfrow=c(2,3))
+plotCounts(dds, gene="ENSG00000230746.1", intgroup="ageOfDeath")
+plotCounts(dds, gene="ENSG00000142684.9", intgroup="ageOfDeath")
+plotCounts(dds, gene="ENSG00000178922.16", intgroup="ageOfDeath")
+plotCounts(dds, gene="ENSG00000136488.15", intgroup="ageOfDeath")
+plotCounts(dds, gene="ENSG00000229673.1", intgroup="ageOfDeath")
+plotCounts(dds, gene="ENSG00000182070.5", intgroup="ageOfDeath")
+
+```
+  
+  
+For customized plotting, an argument returnData specifies that the function should only return a data.frame for plotting with ggplot.
+
+```{r}
+
+G1 <- plotCounts(dds, gene="ENSG00000230746.1", intgroup="ageOfDeath", returnData=TRUE)
+ggplot(G1, aes(x=ageOfDeath, y=count)) + 
+  geom_point() + 
+  ggtitle("ENSG00000230746.1 expression declines with age")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 10),
+        axis.title=element_text(size=10,face="bold"))+
+  theme(plot.title = element_text(size = 8, face = "bold"))+
+  scale_y_log10()
+
+```
+  
+
+### *Volcano Plot: visualize the significant tags*
+```{r}
+
+library(ggrepel)
+
+# Create an extra column where you can assign the direction of GE to genes
+sigs.df$diffexpressed <- "NO"
+sigs.df$diffexpressed[sigs.df$log2FoldChange > 0.5] <- "UP"
+sigs.df$diffexpressed[sigs.df$log2FoldChange < - 0.5] <- "DOWN"
+
+table(sigs.df$diffexpressed)
+# DOWN      NO        UP 
+# 717     20403       6821 
+
+# plot
+ggplot(data=sigs.df, 
+       aes(x=log2FoldChange, y=-log10(padj), color=diffexpressed)) +
+  geom_point() +
+  theme_minimal() + 
+  scale_color_manual(values=c("steelblue", "grey56","red3"))+
+  scale_x_continuous(limits = c(-5, 5), breaks=c(-5, -2.5, 0, 2.5, 5))+
+  geom_vline(xintercept=c(-1, 1), col="grey70") +
+  geom_hline(yintercept=-log10(0.05), col="grey50") + 
+  ggtitle('Differentially expressed genes related to Age') + 
+  ylab('-Log10(Adjusted P-Value)') + 
+  xlab('-Log2 Fold Change') +
+  theme(axis.line = element_line(size=1),
+        axis.text= element_text(size=9, face="bold"),
+        axis.title = element_text(size=10, face="bold"),
+        plot.title = element_text(size=14, face="bold"))+
+  geom_text_repel(data = sigs.df %>% filter(diffexpressed==c("UP", "DOWN")),
+                  aes(label=hgnc_symbol),
+                  box.padding   = 0.1,
+                  point.padding = 0.1,
+                  force         = 100,
+                  segment.size  = 0.1,
+                  direction     = "x") 
+
+
+
+
+```
+
+
+## Step 12) Getting more information on results column
+
+```{r}
+
+mcols(sigs)$description
+
+```
+
+
+
+
+
+
+
+
