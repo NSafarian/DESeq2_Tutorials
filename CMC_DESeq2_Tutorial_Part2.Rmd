@@ -9,6 +9,10 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## R Markdown
+In part 2, the steps for bulk brain tissue RNA-Seq analysis using DESeq2 package are explained.  
+For further information on how to do this type of analysis please check the link below: [bioconductor support](
+https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#access-to-all-calculated-values)
 ## Load the libraries
 
 ```{r, include=FALSE}
@@ -147,7 +151,11 @@ coldata$Dx = factor(coldata$Dx, c('Control')) #'SCZ'
 dds <- DESeqDataSetFromMatrix(countData = cts, 
                               colData = coldata, 
                               design = 
-                                ~ Ethnicity+Reported_Gender+PMI+ageOfDeath)
+                                ~ Ethnicity+Reported_Gender+PMI+ageOfDeath) 
+                                
+# Note: if you'd like to include ONLY numerical covariates (such as Age) in the model, you'll need to be careful of INTERCEPT term. # Since, models with or without intercept (i.e., Design= ~ Age vs. Design= ~0+Age , respectively) will yeild different outputs. 
+# Plotting the fitted line for each gene and checking the sploes is one way to make sure which model is describing the data better. # Though, as a role of thumb, for numerical covariates it'd be best to include the intercept (for example, Design = ~ Age). 
+# IF you have multiple factors and numerical covariates you don't need to worry about this issue. 
 
 ```
 
