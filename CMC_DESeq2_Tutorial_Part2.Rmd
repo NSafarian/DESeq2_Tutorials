@@ -177,6 +177,7 @@ dds <- dds[ids, ]
 
 dds$Ethnicity <- relevel(dds$Ethnicity, "Caucasian")
 dds$Sex <- relevel(dds$Sex, "XY")
+dds$Reported_Gender <- relevel(dds$Reported_Gender, "Male")
 dds$Dx <- relevel(dds$Dx,"Control")
 
 ```
