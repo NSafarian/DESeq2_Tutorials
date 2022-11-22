@@ -11,15 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
-This is the first script of a series of R Markdown documents contaning codes for bulk brain tissue RNA-Seq analysis using DESeq2 package. In summary, what is presented in each script is as follows:
-  - Script 1) The Common Mind data set is downloaded directly from Synpaser.
-  - Script 2) Construct DESeq2 object and perform differential gene expression profiling.
-  - Script 3) Data transformations and visualization.
-  - Script 4) Variations to the standard workflow.
-
-
-For further information on how to do this type of analysis please check the link below: [bioconductor support](
-https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#access-to-all-calculated-values)
+This is the first script of a series of R Markdown documents contaning codes for bulk brain tissue RNA-Seq analysis using DESeq2 package. 
+In this script, the steps to download the common mind daataset rom synpser and preprocess it is explained.
 
 ## load the libraries
 
