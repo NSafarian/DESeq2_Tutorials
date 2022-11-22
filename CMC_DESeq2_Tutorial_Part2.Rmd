@@ -13,6 +13,8 @@ knitr::opts_chunk$set(echo = TRUE)
 In part 2, the steps for bulk brain tissue RNA-Seq analysis using DESeq2 package are explained.  
 For further information on how to do this type of analysis please check the link below: [bioconductor support](
 https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#access-to-all-calculated-values)
+
+
 ## Load the libraries
 
 ```{r, include=FALSE}
