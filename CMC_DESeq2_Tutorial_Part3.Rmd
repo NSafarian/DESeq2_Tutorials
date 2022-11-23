@@ -190,9 +190,9 @@ NPs_plot_list <- colnames(dt [, -c(1:5)]) %>%
      # 1) you need to remove the categorical variable columns before calling 
      # for the function (that's why i used "colnames(dt [, -c(1:5)])" , where 
      # column 1 to 5 are all categorical). 
-     # 2) in the map() function the colnames(dt)[1] part asks to consider 
-     # column 1 as the grouping variable for plotting counts. In this case it's 
-     # cohorts. But for sure we can use Gender column too. 
+     # 2) in the map() function the "colnames(dt)[1]" part asks to consider 
+     # column 1 as a grouping variable for plotting counts. In this case it's 
+     # cohorts. But for sure you can use Gender column too. 
      
 
 # save
