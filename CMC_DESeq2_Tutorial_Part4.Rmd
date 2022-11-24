@@ -200,3 +200,30 @@ saveRDS(NPs_plot_list , "select_neuropeptides_plot_list.Rds")
 
 ```
 
+
+Note: instead of making boxplot for expression values vs. a grouping variable, we can plot the expression levels vs. age, which of interest in this project. To make a scatter plot for those select.genes run the followings: 
+
+```{r}
+# scatter plot for NPs expression vs. Age
+scatterPlot_fun <- function (df, x_var, y_var){
+  ggplot(df, aes(x=.data[[x_var]], y=.data[[y_var]]))+
+    geom_point()+
+    ggtitle(paste0("...."), y_var)+
+    labs(x= x_var, y=y_var)+
+    theme(axis.text = element_text(size=10, face="bold"),
+          axis.title = element_text(size=10, face="bold"))+
+    theme_bw()
+}
+
+
+# call the function to make a list of plot 
+NPs.Age_Scatterplots <- colnames(dt [, -c(1:5)]) %>%  
+  map (~ scatterPlot_fun(dt, colnames(dt)[5], .x)) # column 5 is Age
+
+# save
+saveRDS(NPs.Age_Scatterplots , "select_neuropeptides_vs_Age_plot_list.Rds")
+
+```
+
+Note: only 26 of the GO_selected_NPs show a decline in the gene expression levels in the Common Mind dataset. 
+
