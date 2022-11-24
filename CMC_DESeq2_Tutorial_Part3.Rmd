@@ -1,0 +1,230 @@
+---
+title: "DESeq2_CMC_Tutorial_part3"
+author: "Nickie Safarian"
+date: "11/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+Script 3 explains variations to the standard workflow.
+
+
+## Load packages
+
+```{r}
+
+library(DESeq2)
+library(tidyverse)
+
+```
+
+## Import data
+
+```{r}
+
+dds <- readRDS(file=file.path("/external/rprshnas01/kcni/nsafarian/CMC_Data_Analysis/CommonMind.Data/DESeq2Object/dds_CMCdata_onlyControls.counts.more.than.10.Rds"))
+
+
+```
+
+## Data transformations and visualization
+
+```{r}
+
+# First, Count data transformations
+vsd <- vst(dds, blind=FALSE) 
+
+# save
+saveRDS(vsd, "CMCdata_vst.Transformed_onlyControls_counts.more.than.10.Rds")
+
+```
+
+```{r}
+
+# other methods for count data transformations
+# log transformation
+rld <- rlog(dds, blind=FALSE) #The running times are shorter 
+                              # when using blind=FALSE
+# this gives log2(n + 1)
+ntd <- normTransform(dds)
+
+```
+
+
+## Effects of transformations on the variance
+
+```{r}
+
+library("vsn")
+meanSdPlot(assay(vsd))
+
+```
+
+```{r}
+
+meanSdPlot(assay(ntd))
+
+```
+
+```{r}
+
+meanSdPlot(assay(rld))
+
+```
+
+
+## Data quality assessment by sample clustering and visualization
+### *Heatmap of the count matrix*
+
+```{r}
+
+# install.packages("pheatmap")
+library("pheatmap")
+
+select <- order(rowMeans(counts(dds,normalized=TRUE)),
+                decreasing=TRUE)[1:20]
+df <- as.data.frame(colData(dds)[,c("Cohort", "Sex", "Ethnicity", "Dx")])
+
+pheatmap(assay(ntd)[select,], cluster_rows=FALSE, show_rownames=FALSE, cluster_cols=FALSE, annotation_col=df)
+
+cdata <- as.data.frame(colData(dds))
+cdata.sub <- cdata[, c( 4, 6:8)] # these columns are 
+                                # Cohort,Sex,Ethnicity, and Dx. 
+
+pheatmap(assay(ntd),
+    cluster_rows = FALSE,
+    show_rownames = FALSE,
+    cluster_cols = FALSE,
+    annotation_col = cdata.sub)
+dev.off()
+
+
+
+```
+
+
+### *Heatmap of the sample-to-sample distances*
+Another use of the transformed data is sample clustering. Here, we apply the dist function to the transpose of the transformed count matrix to get sample-to-sample distances.
+
+```{r}
+
+sampleDists <- dist(t(assay(vsd)))
+
+library("RColorBrewer")
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$condition, vsd$type, sep="-")
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap <- pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors)
+
+pheatmap 
+
+```
+
+
+## Principal component Analysis of the samples
+
+```{r}
+
+plotPCA(vsd, intgroup=c( "Cohort", "Sex", "Ethnicity", "Dx"))
+
+```
+
+
+## Detect Outliers
+
+*Get the count.per.million values*
+We can use the cpm function to get log2 counts per million, which are corrected for the different library sizes. The cpm function also adds a small offset to avoid taking log of zero.
+
+```{r, message= FALSE}
+
+library(edgeR)
+library(limma)
+library(Glimma)
+library(Rcpp)
+
+# Get log2 counts per million
+CPM <- cpm(cts,log=TRUE)  # remember to load the count matrix (cts)
+
+# Check distributions of samples using boxplots
+boxplot(CPM, xlab="", ylab="Log2 counts per million",las=2, cex.axis=0.5)
+# Let's add a blue horizontal line that corresponds to the median logCPM
+abline(h=median(CPM),col="blue")
+title("Boxplots of logCPMs (unnormalised)")
+
+```
+
+## Density.Plot log2 values (Optional):
+
+```{r}
+
+# extra method
+log.counts = log2(cts + 1)
+colramp = colorRampPalette(c(3,"white",2))(74)
+plot(density(log.counts[,1]),col=colramp[1],lwd=3,ylim=c(0,0.4))
+for(i in 1:74){lines(density(log.counts[,i]),lwd=3,col=colramp[i])}
+
+
+```
+
+
+Note: it's Strongly suggested that we do not filter reads in the data based on raw counts. Instead, we should just make the dds (DESeq2) object, then remove outliers on the normalized count matrix. 
+
+If using EdgeR package, you will need to filter data using CPM values. Usually a CPM of 0.5 is used as it corresponds to a count of 10-15 for the library sizes in this data set. If the count is any smaller, it is considered to be very low, indicating that the associated gene is not expressed in that sample. A requirement for expression in two or more libraries is used as each group contains two replicates. This ensures that a gene will be retained if it is only expressed in one group. Smaller CPM thresholds are usually appropriate for larger libraries. As a general rule, a good threshold can be chosen by identifying the CPM that corresponds to a count of 10, which in this case is about 0.5. You should filter with CPMs rather than filtering on the counts directly, as the latter does not account for differences in library sizes between samples.
+
+#---------------------------------------------------------------------------------
+
+## More for outlier detection (optional):
+
+Bootstrapped hierarchical clustering (unsupervised - i.e. entire dataset)
+Using regularised log or variance stabilized counts:
+
+```{r}
+
+library(pvclust)
+pv <- pvclust(log.counts, method.dist="euclidean", method.hclust="ward.D2", nboot=10)
+
+plot(pv)
+
+```
+
+
+## Filtering out low variance genes (Not Recommended):
+
+```{r}
+
+#plot the row-wise variance and draw a visual cutoff 
+# to exclude genes with low information content
+rv <- matrixStats::rowVars(as.matrix(assay(vsd)))
+rv2 <- data.frame(Seq = seq(1:nrow(vsd)), rowVars = rv[order(rv, decreasing = TRUE)])
+theme_set(theme_bw(base_size = 10))
+ggplot(rv2, aes(x=Seq,y=rowVars)) + geom_line() + scale_y_log10() +
+  ggtitle("vst-transformed counts ordered by rowVar")
+
+
+# concert the normalized counts to a data frame
+norm.exp.df <- as.data.frame(assays(vsd)) #33021 genes
+norm.exp.df <- norm.exp.df[, -c(1,2)]
+
+# calculate the Median and variance per row
+norm.exp.df$q50 <- apply(norm.exp.df,1 ,quantile, probs=c(.50))
+norm.exp.df$variance = apply(norm.exp.df, 1, var)
+
+# filter the genes with variance <50th percentile across individuals
+norm.exp.filt = norm.exp.df[norm.exp.df$variance >= norm.exp.df$q50, ]
+
+```
+
+
+
+
+
+
