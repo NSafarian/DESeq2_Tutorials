@@ -227,3 +227,97 @@ saveRDS(NPs.Age_Scatterplots , "select_neuropeptides_vs_Age_plot_list.Rds")
 
 Note: only 26 of the GO_selected_NPs show a decline in the gene expression levels in the Common Mind dataset. 
 
+#--------------------------------------------------------------------------------------------------------------------------
+
+## Extra Notes (very helpful) 
+
+vsd() function calculates a variance stabilizing transformation (VST) from the 
+fitted dispersion-mean relation(s) and then transforms the count data 
+(normalized by division by the size factors or normalization factors), 
+yielding a matrix of values which are now approximately homoskedastic 
+(having constant variance along the range of mean values). The transformation 
+also normalizes with respect to library size. The rlog is less sensitive to 
+size factors, which can be an issue when size factors vary widely. These 
+transformations are useful when checking for outliers or as input for machine 
+learning techniques such as clustering or linear discriminant analysis.
+
+
+Since, some researchers prefer to show the expression levels by the log-transformed counts values,
+I'm including the following line of codes so you can vidualize counts this way too: 
+
+```{r}
+
+# load the packages
+library(edgeR)
+library(limma)
+library(Glimma)
+library(Rcpp)
+
+# Get log2 counts per million
+CMC_CPM <- cpm(cts,log=TRUE) # remeber to load the cts data first
+
+# convert it into a data frame
+CMC_CPM <- CMC_CPM %>% as.data.frame() %>% 
+  tibble::rownames_to_column(var = "ensembl_id") # 451 control samples
+
+
+# remove the decimals from the end of ensembl_ids
+CMC_CPM$IDs <- sapply(strsplit(CMC_CPM$ensembl_id, split="\\." ), "[", 1 )
+CMC_CPM <- CMC_CPM[, c(453, 1: 452)]
+
+# subset the CPM data for only selected neuropeptides and transform the data 
+select.genes.CPM = CMC_CPM %>% 
+  filter(IDs %in%  Age_NPs.Full$ensembl_gene_id) %>% 
+  t() %>% as.data.frame() %>% 
+  tibble::rownames_to_column(var = 'SampleID') # all 79 NP genes are found
+
+
+# now make "Ensembl_ID" row as colnames
+colnames(select.genes.CPM) <- select.genes.CPM[1, ] 
+
+# # remove "ensembl_id" row (which has the decimal and sits in the first row)
+select.genes.CPM <- select.genes.CPM[-(1:2), ] 
+                                           
+# I also checked if sample ID rows are in the same order between metadata and select.genes.CPM (it's just for extra cautions)
+all(select.genes.CPM$IDs == METADATA$SampleID)
+
+
+# Now Add Age column from metadata 
+select.genes.CPM$Age <- METADATA$ageOfDeath # it's a 451 * 80 matrix
+
+# reorder so Age column is at the begining of the matrix
+select.genes.CPM <- select.genes.CPM[, c(1,80, 2:79)] 
+
+# arrange data by age (ascending)
+select.genes.CPM <- select.genes.CPM %>% 
+  arrange(Age)
+
+# convert all character columns to as.numeric for plotting 
+select.genes.CPM[, -1] <- sapply(select.genes.CPM[, -1], as.numeric)
+sapply(select.genes.CPM, class)
+
+
+# plot the counts for a single gene
+ggplot(select.genes.CPM, aes(x=Age, y=ENSG00000175206)) + 
+  geom_point() + 
+  ggtitle("NPPA expression across age)")+
+  theme_bw()+
+  theme(axis.text.y = element_text(size = 10),
+        axis.title =element_text(size=10,face="bold"))+
+  theme(plot.title = element_text(size = 8, face = "bold"))+
+  scale_x_continuous(limits=c(0, 100))
+  
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
