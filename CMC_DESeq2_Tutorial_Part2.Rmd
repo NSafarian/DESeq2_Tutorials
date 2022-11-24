@@ -144,6 +144,10 @@ coldata$Sex <- factor(coldata$Sex , c("XY","XX"))
 coldata$Reported_Gender <- factor(coldata$Reported_Gender, c("Male", "Female"))
 coldata$Dx = factor(coldata$Dx, c('Control')) #'SCZ'
 
+# Update the names of Institution (b/c R gets confused with "-" sign in the names):
+coldata$Institution[coldata$Institution=="NIMH-HBCC"] <- "HBCC" 
+coldata$Institution = factor(coldata$Institution, c("MSSM","Penn","Pitt", "HBCC"))
+
 ```
 
 
@@ -154,7 +158,7 @@ coldata$Dx = factor(coldata$Dx, c('Control')) #'SCZ'
 dds <- DESeqDataSetFromMatrix(countData = cts, 
                               colData = coldata, 
                               design = 
-                                ~ Ethnicity+Reported_Gender+PMI+ageOfDeath)
+                                ~ Ethnicity+Institution+Reported_Gender+RIN+PMI+ageOfDeath)
 
 ```
 
